@@ -1,0 +1,12 @@
+{
+  "name": "naxora-bot",
+  "version": "1.0.0",
+  "description": "Bot officiel d'assistance et sécurité Naxora",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.0"
+  }
+}
