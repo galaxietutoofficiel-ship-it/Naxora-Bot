@@ -1,4 +1,8 @@
 const { 
+  Client, 
+  GatewayIntentBits, 
+  REST, 
+  Routes, 
   SlashCommandBuilder, 
   EmbedBuilder, 
   ActionRowBuilder, 
@@ -9,79 +13,123 @@ const {
   PermissionFlagsBits 
 } = require('discord.js');
 
-// ⚙️ TES CONFIGURATIONS (À remplacer par tes vrais ID)
-const ID_ROLE_STAFF = 'ID_DU_ROLE_STAFF'; 
-const ID_CATEGORIE_TICKETS = 'ID_DE_LA_CATEGORIE'; 
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers,
+  ],
+});
 
-module.exports = {
-  // =================================================================
-  // 1. COMMANDE /signalement (Tutoriel Pharos pour le Staff)
-  // =================================================================
-  signalementCommand: {
-    data: new SlashCommandBuilder()
-      .setName('signalement')
-      .setDescription('Tutoriel rapide et lien officiel pour Pharos (Staff uniquement)')
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
+// Stockage des configurations de tickets par serveur
+const ticketConfigs = new Map();
 
-    async execute(interaction) {
-      const embed = new EmbedBuilder()
-        .setColor('#FF3333')
-        .setTitle('🚨 Tutoriel Signalement Pharos - Staff Naxora')
-        .setDescription('Ce guide t\'aide à effectuer un signalement officiel ou à préparer le dossier pour la Direction.')
-        .addFields(
-          { name: '🌐 Site Officiel Pharos', value: '[Accéder à la plateforme Pharos](https://www.internet-signalement.gouv.fr)' },
-          { name: '📌 Quand signaler ?', value: '• Phishing / Vol de compte\n• Doxxing (divulgation de données privées)\n• Cyberharcèlement grave.' },
-          { name: '📋 Procédure :', value: '1️⃣ Fais des captures d\'écran.\n2️⃣ Copie l\'ID Discord de l\'auteur.\n3️⃣ Fais le signalement ou transmets tout à la Direction.' }
-        )
-        .setFooter({ text: 'Naxora Security System' });
+// Définition des commandes
+const commands = [
+  new SlashCommandBuilder()
+    .setName('signalement')
+    .setDescription('Tutoriel rapide et lien officiel pour Pharos (Staff uniquement)')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
 
-      await interaction.reply({ embeds: [embed], ephemeral: true });
+  new SlashCommandBuilder()
+    .setName('setup-ticket')
+    .setDescription('Déploie le panel et configure ton rôle staff et ta catégorie en un clic !')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addRoleOption(option => 
+      option.setName('role_staff')
+        .setDescription('Choisis le rôle qui aura accès aux tickets')
+        .setRequired(true))
+    .addChannelOption(option => 
+      option.setName('categorie')
+        .setDescription('Choisis la catégorie où créer les salons de tickets')
+        .addChannelTypes(ChannelType.GuildCategory)
+        .setRequired(true))
+].map(command => command.toJSON());
+
+client.once('ready', async () => {
+  console.log(`✅ Bot connecté : ${client.user.tag}`);
+
+  // Utilisation automatique du token de l'environnement de Bot-Hosting
+  const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+
+  try {
+    console.log('🔄 Enregistrement des commandes...');
+    // S'enregistre tout seul avec l'ID du bot connecté
+    await rest.put(
+      Routes.applicationCommands(client.user.id),
+      { body: commands },
+    );
+    console.log('✨ Commandes enregistrées avec succès !');
+  } catch (error) {
+    console.error(error);
+  }
+});
+
+client.on('interactionCreate', async (interaction) => {
+  try {
+    // 1. Gestion des Slash Commandes
+    if (interaction.isChatInputCommand()) {
+      if (interaction.commandName === 'signalement') {
+        const embed = new EmbedBuilder()
+          .setColor('#FF3333')
+          .setTitle('🚨 Tutoriel Signalement Pharos - Staff Naxora')
+          .setDescription('Ce guide t\'aide à effectuer un signalement officiel ou à préparer le dossier pour la Direction.')
+          .addFields(
+            { name: '🌐 Site Officiel Pharos', value: '[Accéder à la plateforme Pharos](https://www.internet-signalement.gouv.fr)' },
+            { name: '📌 Quand signaler ?', value: '• Phishing / Vol de compte\n• Doxxing (divulgation de données privées)\n• Cyberharcèlement grave.' },
+            { name: '📋 Procédure :', value: '1️⃣ Fais des captures d\'écran.\n2️⃣ Copie l\'ID Discord de l\'auteur.\n3️⃣ Fais le signalement ou transmets tout à la Direction.' }
+          )
+          .setFooter({ text: 'Naxora Security System' });
+
+        await interaction.reply({ embeds: [embed], ephemeral: true });
+      } 
+      else if (interaction.commandName === 'setup-ticket') {
+        const roleStaff = interaction.options.getRole('role_staff');
+        const categorie = interaction.options.getChannel('categorie');
+
+        ticketConfigs.set(interaction.guildId, {
+          roleId: roleStaff.id,
+          categoryId: categorie.id
+        });
+
+        const embed = new EmbedBuilder()
+          .setColor('#5865F2')
+          .setTitle('🎫 Centre de Support & Assistance - Naxora')
+          .setDescription('Besoin d\'aide ou envie de signaler une infraction ? Sélectionnez la catégorie ci-dessous.')
+          .addFields(
+            { name: '🛡️ Sécurité & Phishing', value: 'Liens suspects, fausses offres, vols de compte.' },
+            { name: '🔍 Doxxing & Intimidation', value: 'Divulgation de vos données privées ou harcèlement.' },
+            { name: '❓ Question / Aide Générale', value: 'Pour toute demande d\'information globale.' }
+          )
+          .setFooter({ text: 'Un salon privé sera automatiquement créé avec l\'équipe.' });
+
+        const menu = new ActionRowBuilder().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId('select_ticket_type')
+            .setPlaceholder('👉 Choisissez le motif de votre ticket...')
+            .addOptions([
+              { label: 'Sécurité & Phishing', description: 'Signaler un lien frauduleux ou un piratage', value: 'ticket_phishing', emoji: '🛡️' },
+              { label: 'Doxxing & Fuite d\'infos', description: 'Signaler des menaces ou la fuite de données', value: 'ticket_doxx', emoji: '🔍' },
+              { label: 'Question / Support', description: 'Besoin d\'aide générale sur le serveur', value: 'ticket_general', emoji: '❓' },
+            ])
+        );
+
+        await interaction.channel.send({ embeds: [embed], components: [menu] });
+        await interaction.reply({ 
+          content: `✅ Panel déployé avec succès !\n🛡️ Rôle staff autorisé : **@${roleStaff.name}**\n📂 Catégorie : **${categorie.name}**`, 
+          ephemeral: true 
+        });
+      }
     }
-  },
 
-  // =================================================================
-  // 2. COMMANDE /setup-ticket (Déploie le Panel avec Menu Déroulant)
-  // =================================================================
-  setupTicketCommand: {
-    data: new SlashCommandBuilder()
-      .setName('setup-ticket')
-      .setDescription('Déploie le panel de création de tickets')
-      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    // 2. Création du salon de ticket via le menu déroulant
+    else if (interaction.isStringSelectMenu() && interaction.customId === 'select_ticket_type') {
+      const config = ticketConfigs.get(interaction.guildId);
+      if (!config) {
+        return interaction.reply({ content: '❌ Tu dois d\'abord configurer le panel en tapant `/setup-ticket` sur ce serveur.', ephemeral: true });
+      }
 
-    async execute(interaction) {
-      const embed = new EmbedBuilder()
-        .setColor('#5865F2')
-        .setTitle('🎫 Centre de Support & Assistance - Naxora')
-        .setDescription('Besoin d\'aide ou envie de signaler une infraction ? Sélectionnez la catégorie ci-dessous.')
-        .addFields(
-          { name: '🛡️ Sécurité & Phishing', value: 'Liens suspects, fausses offres, vols de compte.' },
-          { name: '🔍 Doxxing & Intimidation', value: 'Divulgation de vos données privées ou harcèlement.' },
-          { name: '❓ Question / Aide Générale', value: 'Pour toute demande d\'information globale.' }
-        )
-        .setFooter({ text: 'Un salon privé sera automatiquement créé avec l\'équipe.' });
-
-      const menu = new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId('select_ticket_type')
-          .setPlaceholder('👉 Choisissez le motif de votre ticket...')
-          .addOptions([
-            { label: 'Sécurité & Phishing', description: 'Signaler un lien frauduleux ou un piratage', value: 'ticket_phishing', emoji: '🛡️' },
-            { label: 'Doxxing & Fuite d\'infos', description: 'Signaler des menaces ou la fuite de données', value: 'ticket_doxx', emoji: '🔍' },
-            { label: 'Question / Support', description: 'Besoin d\'aide générale sur le serveur', value: 'ticket_general', emoji: '❓' },
-          ])
-      );
-
-      await interaction.channel.send({ embeds: [embed], components: [menu] });
-      await interaction.reply({ content: '✅ Panel de ticket déployé avec succès !', ephemeral: true });
-    }
-  },
-
-  // =================================================================
-  // 3. GESTIONNAIRE D'ÉVÉNEMENTS (Création de salon + Boutons Sécurisés)
-  // =================================================================
-  handleInteractions: async function(interaction) {
-    // Clic sur le menu déroulant du panel
-    if (interaction.isStringSelectMenu() && interaction.customId === 'select_ticket_type') {
       const type = interaction.values[0];
       const guild = interaction.guild;
       const user = interaction.user;
@@ -89,11 +137,11 @@ module.exports = {
       const ticketChannel = await guild.channels.create({
         name: `ticket-${user.username}`,
         type: ChannelType.GuildText,
-        parent: ID_CATEGORIE_TICKETS,
+        parent: config.categoryId,
         permissionOverwrites: [
           { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
           { id: user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles] },
-          { id: ID_ROLE_STAFF, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles] },
+          { id: config.roleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles] },
         ],
       });
 
@@ -114,14 +162,14 @@ module.exports = {
                 .setDescription(`Bonjour ${user}, posez votre question ci-dessous.`);
       }
 
-      await ticketChannel.send({ content: `${user} | <@&${ID_ROLE_STAFF}>`, embeds: [embedMsg], components: [boutonsStaff] });
+      await ticketChannel.send({ content: `${user} | <@&${config.roleId}>`, embeds: [embedMsg], components: [boutonsStaff] });
     }
 
-    // Clic sur les boutons de gestion du ticket
-    if (interaction.isButton()) {
-      const estStaff = interaction.member.roles.cache.has(ID_ROLE_STAFF);
+    // 3. Gestion des boutons du staff
+    else if (interaction.isButton()) {
+      const config = ticketConfigs.get(interaction.guildId);
+      const estStaff = config && interaction.member.roles.cache.has(config.roleId);
 
-      // Sécurité : Seul le staff peut utiliser les boutons
       if (!estStaff) {
         return interaction.reply({ content: '❌ **Accès refusé :** Réservé exclusivement au staff Naxora.', ephemeral: true });
       }
@@ -147,8 +195,13 @@ module.exports = {
       }
 
       if (interaction.customId === 'btn_ajouter_membre') {
-        await interaction.reply({ content: '💡 Pour ajouter un membre, tapez la commande d\'ajout dans ce salon.', ephemeral: true });
+        await interaction.reply({ content: '💡 Pour ajouter un membre, gère les permissions du salon directement sur Discord.', ephemeral: true });
       }
     }
+  } catch (err) {
+    console.error(err);
   }
-};
+});
+
+// Connexion via la variable d'environnement de Bot-Hosting
+client.login(process.env.TOKEN);
