@@ -20,7 +20,7 @@ const client = new Client({
 
 // Remplace par ton TOKEN Discord et l'ID de la catégorie où créer les tickets
 client.login(TOKEN);
-const CATEGORIE_TICKETS_ID = 'ID_DE_TA_CATEGORIE_TICKETS';
+const CATEGORIE_TICKETS_ID = '1561309560189358081';
 
 client.once('ready', () => {
     console.log(`✅ SecteurBot est en ligne sous le pseudo : ${client.user.tag}`);
