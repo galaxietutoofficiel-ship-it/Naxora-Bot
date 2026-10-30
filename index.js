@@ -124,4 +124,5 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-client.login(TOKEN);
+const TOKEN = process.env.DISCORD_TOKEN;
+
