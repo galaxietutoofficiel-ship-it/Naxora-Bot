@@ -19,7 +19,7 @@ const client = new Client({
 });
 
 // Remplace par ton TOKEN Discord et l'ID de la catégorie où créer les tickets
-const TOKEN = 'TON_TOKEN_DE_BOT_ICI';
+client.login(TOKEN);
 const CATEGORIE_TICKETS_ID = 'ID_DE_TA_CATEGORIE_TICKETS';
 
 client.once('ready', () => {
@@ -124,5 +124,5 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-const TOKEN = process.env.DISCORD_TOKEN;
+
 
